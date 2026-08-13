@@ -138,7 +138,12 @@
 
         await scanner.start(
           { facingMode: 'environment' },
-          { fps: 10, qrbox: qrboxFunction },
+          {
+  fps: 15,
+  qrbox: qrboxFunction,
+  formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ],
+  experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+},
           onScanSuccess,
           () => {}
         );
@@ -194,7 +199,7 @@
         overlay.classList.remove('show');
         dotEl.style.background = 'var(--ok)';
         isPaused = false;
-      }, 1500);
+      }, 900);
     }
   </script>
 </body>
