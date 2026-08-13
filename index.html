@@ -3,63 +3,199 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <title>Diagnóstico QR</title>
+  <title>Check-in Camera Crew MTY</title>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <style>
-    body { margin: 0; background: #000; color: #0f0; font-family: monospace; font-size: 12px; }
-    #reader { width: 100%; max-width: 500px; margin: 0 auto; }
-    #log {
-      background: #111; color: #0f0; padding: 10px; white-space: pre-wrap;
-      height: 200px; overflow-y: auto; border-top: 2px solid #0f0;
+    :root {
+      --bg: #0d0f0d;
+      --line: #2a2d2e;
+      --text: #ececea;
+      --muted: #8a8f8c;
+      --accent: #e8462a;
+      --ok: #3ecf6e;
+      --warn: #e8b53a;
+      --err: #e8462a;
+      --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+      --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0; background: var(--bg); color: var(--text);
+      font-family: var(--sans); height: 100%; overflow: hidden;
+    }
+    .frame { display: flex; flex-direction: column; height: 100vh; }
+    header { padding: 14px 18px 10px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
+    .eyebrow {
+      font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em;
+      color: var(--accent); text-transform: uppercase;
+    }
+    h1 { margin: 4px 0 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+    #reader-wrap {
+      position: relative; flex: 1; min-height: 0; background: #000;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #reader { width: 100%; }
+    #start-screen {
+      position: absolute; inset: 0; z-index: 30; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 16px; text-align: center;
+      padding: 32px; background: var(--bg);
+    }
+    #start-screen .icon { font-size: 40px; }
+    #start-screen p { color: var(--muted); font-size: 13px; max-width: 260px; line-height: 1.5; margin: 0; }
     #start-btn {
-      display: block; width: 100%; padding: 16px; font-size: 16px;
-      background: #e8462a; color: #fff; border: none;
+      background: var(--accent); color: #fff; border: none; padding: 14px 28px;
+      border-radius: 6px; font-size: 15px; font-weight: 600; font-family: var(--sans);
     }
-    #attempts { color: #ff0; padding: 6px; text-align: center; }
+    #start-btn:active { opacity: 0.85; }
+    #start-error { color: var(--err); font-family: var(--mono); font-size: 12px; display: none; max-width: 280px; }
+    #status-overlay {
+      position: absolute; inset: 0; z-index: 20; display: flex; align-items: center;
+      justify-content: center; flex-direction: column; gap: 6px; opacity: 0;
+      pointer-events: none; transition: opacity 0.15s ease; text-align: center; padding: 24px;
+      background: rgba(13,15,13,0.92);
+    }
+    #status-overlay.show { opacity: 1; }
+    #status-overlay .glyph { font-size: 54px; line-height: 1; font-family: var(--mono); }
+    #status-overlay .name { font-size: 20px; font-weight: 600; }
+    #status-overlay .sub {
+      font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em;
+      text-transform: uppercase; opacity: 0.8;
+    }
+    footer {
+      flex-shrink: 0; padding: 12px 18px 16px; border-top: 1px solid var(--line);
+      display: flex; align-items: center; justify-content: space-between;
+      font-family: var(--mono); font-size: 12px; color: var(--muted);
+    }
+    #count { color: var(--text); }
+    #dot {
+      width: 8px; height: 8px; border-radius: 50%; background: var(--ok);
+      display: inline-block; margin-right: 6px; animation: pulse 1.6s infinite;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
   </style>
 </head>
 <body>
-  <button id="start-btn">ACTIVAR CÁMARA (modo diagnóstico)</button>
-  <div id="attempts">Intentos de lectura: 0</div>
-  <div id="reader"></div>
-  <div id="log">Esperando...\n</div>
+  <div class="frame">
+    <header>
+      <div class="eyebrow">Camera Crew MTY &middot; Entrada</div>
+      <h1>Check-in</h1>
+    </header>
+    <div id="reader-wrap">
+      <div id="reader"></div>
+      <div id="start-screen">
+        <div class="icon">📷</div>
+        <button id="start-btn">Activar cámara</button>
+        <p>El navegador va a pedir permiso de cámara. Toca "Permitir" cuando aparezca.</p>
+        <p id="start-error"></p>
+      </div>
+      <div id="status-overlay">
+        <div class="glyph" id="status-glyph"></div>
+        <div class="name" id="status-name"></div>
+        <div class="sub" id="status-sub"></div>
+      </div>
+    </div>
+    <footer>
+      <span><span id="dot"></span>Escaneando</span>
+      <span>Registrados esta sesión: <span id="count">0</span></span>
+    </footer>
+  </div>
 
   <script>
-    const logEl = document.getElementById('log');
-    const attemptsEl = document.getElementById('attempts');
-    let attemptCount = 0;
+    const APP_URL = 'https://script.google.com/macros/s/AKfycbwb2MOKhqlYC18vqPKE7zzuNIwSkDrkSAoK0K1BIKKhaMRE_y6uSCUXDxh0DhqLPXC9ag/exec';
 
-    function log(msg) {
-      logEl.textContent += msg + '\n';
-      logEl.scrollTop = logEl.scrollHeight;
-    }
+    let sessionCount = 0;
+    let isPaused = false;
+
+    const overlay = document.getElementById('status-overlay');
+    const glyphEl = document.getElementById('status-glyph');
+    const nameEl = document.getElementById('status-name');
+    const subEl = document.getElementById('status-sub');
+    const countEl = document.getElementById('count');
+    const dotEl = document.getElementById('dot');
+    const startScreen = document.getElementById('start-screen');
+    const startBtn = document.getElementById('start-btn');
+    const startError = document.getElementById('start-error');
 
     const scanner = new Html5Qrcode('reader');
 
-    document.getElementById('start-btn').addEventListener('click', async () => {
-      log('Botón tocado, pidiendo cámara...');
+    // Zona de escaneo proporcional al tamaño real del visor, calculada
+    // por la propia librería (ya no forzamos el CSS del video).
+    function qrboxFunction(viewfinderWidth, viewfinderHeight) {
+      const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+      const size = Math.floor(minEdge * 0.7);
+      return { width: size, height: size };
+    }
+
+    startBtn.addEventListener('click', async () => {
+      startBtn.textContent = 'Abriendo cámara...';
+      startError.style.display = 'none';
+
       try {
-        const testStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        log('✓ Permiso de cámara concedido');
-        testStream.getTracks().forEach(t => t.stop());
+        const testStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' }
+        });
+        testStream.getTracks().forEach(track => track.stop());
 
         await scanner.start(
           { facingMode: 'environment' },
-          { fps: 10, qrbox: 250 },
-          (decodedText) => {
-            log('✓✓✓ QR LEÍDO: ' + decodedText);
-          },
-          (errorMessage) => {
-            attemptCount++;
-            attemptsEl.textContent = 'Intentos de lectura: ' + attemptCount;
-          }
+          { fps: 10, qrbox: qrboxFunction },
+          onScanSuccess,
+          () => {}
         );
-        log('✓ Cámara iniciada, escaneando...');
+        startScreen.style.display = 'none';
       } catch (err) {
-        log('✗ ERROR: ' + err.name + ' — ' + err.message);
+        startBtn.textContent = 'Reintentar';
+        startError.style.display = 'block';
+        startError.textContent = 'No se pudo abrir la cámara: ' + err;
       }
     });
+
+    function onScanSuccess(decodedText) {
+      if (isPaused) return;
+      isPaused = true;
+      dotEl.style.background = 'var(--muted)';
+
+      fetch(APP_URL + '?id=' + encodeURIComponent(decodedText))
+        .then(res => res.json())
+        .then(handleResult)
+        .catch(handleError);
+    }
+
+    function handleResult(res) {
+      if (res.status === 'ok') {
+        sessionCount += 1;
+        countEl.textContent = sessionCount;
+        showOverlay('✓', res.nombre || '', 'Bienvenido', 'var(--ok)');
+      } else if (res.status === 'duplicate') {
+        showOverlay('⟳', res.nombre || '', 'Ya estaba registrado', 'var(--warn)');
+      } else if (res.status === 'notfound') {
+        showOverlay('✕', '', 'QR no reconocido', 'var(--err)');
+      } else {
+        showOverlay('!', '', res.message || 'Error de conexión', 'var(--err)');
+      }
+      resumeAfterDelay();
+    }
+
+    function handleError(err) {
+      showOverlay('!', '', 'Error de conexión, reintenta', 'var(--err)');
+      resumeAfterDelay();
+    }
+
+    function showOverlay(glyph, name, sub, color) {
+      glyphEl.textContent = glyph;
+      glyphEl.style.color = color;
+      nameEl.textContent = name;
+      subEl.textContent = sub;
+      overlay.classList.add('show');
+    }
+
+    function resumeAfterDelay() {
+      setTimeout(() => {
+        overlay.classList.remove('show');
+        dotEl.style.background = 'var(--ok)';
+        isPaused = false;
+      }, 1500);
+    }
   </script>
 </body>
 </html>
