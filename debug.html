@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>Diagnóstico QR</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    body { margin: 0; background: #000; color: #0f0; font-family: monospace; font-size: 12px; }
+    #reader { width: 100%; max-width: 500px; margin: 0 auto; }
+    #log {
+      background: #111; color: #0f0; padding: 10px; white-space: pre-wrap;
+      height: 200px; overflow-y: auto; border-top: 2px solid #0f0;
+    }
+    #start-btn {
+      display: block; width: 100%; padding: 16px; font-size: 16px;
+      background: #e8462a; color: #fff; border: none;
+    }
+    #attempts { color: #ff0; padding: 6px; text-align: center; }
+  </style>
+</head>
+<body>
+  <button id="start-btn">ACTIVAR CÁMARA (modo diagnóstico)</button>
+  <div id="attempts">Intentos de lectura: 0</div>
+  <div id="reader"></div>
+  <div id="log">Esperando...\n</div>
+
+  <script>
+    const logEl = document.getElementById('log');
+    const attemptsEl = document.getElementById('attempts');
+    let attemptCount = 0;
+
+    function log(msg) {
+      logEl.textContent += msg + '\n';
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    const scanner = new Html5Qrcode('reader');
+
+    document.getElementById('start-btn').addEventListener('click', async () => {
+      log('Botón tocado, pidiendo cámara...');
+      try {
+        const testStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        log('✓ Permiso de cámara concedido');
+        testStream.getTracks().forEach(t => t.stop());
+
+        await scanner.start(
+          { facingMode: 'environment' },
+          { fps: 10, qrbox: 250 },
+          (decodedText) => {
+            log('✓✓✓ QR LEÍDO: ' + decodedText);
+          },
+          (errorMessage) => {
+            attemptCount++;
+            attemptsEl.textContent = 'Intentos de lectura: ' + attemptCount;
+          }
+        );
+        log('✓ Cámara iniciada, escaneando...');
+      } catch (err) {
+        log('✗ ERROR: ' + err.name + ' — ' + err.message);
+      }
+    });
+  </script>
+</body>
+</html>
