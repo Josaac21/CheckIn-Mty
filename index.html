@@ -8,7 +8,6 @@
   <style>
     :root {
       --bg: #0d0f0d;
-      --panel: #17191a;
       --line: #2a2d2e;
       --text: #ececea;
       --muted: #8a8f8c;
@@ -31,18 +30,11 @@
       color: var(--accent); text-transform: uppercase;
     }
     h1 { margin: 4px 0 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
-    #reader-wrap { position: relative; flex: 1; min-height: 0; background: #000; }
-    #reader { width: 100%; height: 100%; }
-    #reader video { object-fit: cover; width: 100% !important; height: 100% !important; }
-    .viewfinder {
-      position: absolute; inset: 0; pointer-events: none;
-      display: flex; align-items: center; justify-content: center; z-index: 5;
+    #reader-wrap {
+      position: relative; flex: 1; min-height: 0; background: #000;
+      display: flex; align-items: center; justify-content: center;
     }
-    .corner { position: absolute; width: 34px; height: 34px; border: 2.5px solid var(--accent); opacity: 0.85; }
-    .corner.tl { top: 22%; left: 14%; border-right: none; border-bottom: none; }
-    .corner.tr { top: 22%; right: 14%; border-left: none; border-bottom: none; }
-    .corner.bl { bottom: 22%; left: 14%; border-right: none; border-top: none; }
-    .corner.br { bottom: 22%; right: 14%; border-left: none; border-top: none; }
+    #reader { width: 100%; }
     #start-screen {
       position: absolute; inset: 0; z-index: 30; display: flex; flex-direction: column;
       align-items: center; justify-content: center; gap: 16px; text-align: center;
@@ -60,6 +52,7 @@
       position: absolute; inset: 0; z-index: 20; display: flex; align-items: center;
       justify-content: center; flex-direction: column; gap: 6px; opacity: 0;
       pointer-events: none; transition: opacity 0.15s ease; text-align: center; padding: 24px;
+      background: rgba(13,15,13,0.92);
     }
     #status-overlay.show { opacity: 1; }
     #status-overlay .glyph { font-size: 54px; line-height: 1; font-family: var(--mono); }
@@ -89,12 +82,6 @@
     </header>
     <div id="reader-wrap">
       <div id="reader"></div>
-      <div class="viewfinder">
-        <div class="corner tl"></div>
-        <div class="corner tr"></div>
-        <div class="corner bl"></div>
-        <div class="corner br"></div>
-      </div>
       <div id="start-screen">
         <div class="icon">📷</div>
         <button id="start-btn">Activar cámara</button>
@@ -114,8 +101,8 @@
   </div>
 
   <script>
-    // URL de tu Apps Script (la que termina en /exec)
     const APP_URL = 'https://script.google.com/macros/s/AKfycbwb2MOKhqlYC18vqPKE7zzuNIwSkDrkSAoK0K1BIKKhaMRE_y6uSCUXDxh0DhqLPXC9ag/exec';
+
     let sessionCount = 0;
     let isPaused = false;
 
@@ -131,6 +118,14 @@
 
     const scanner = new Html5Qrcode('reader');
 
+    // Zona de escaneo proporcional al tamaño real del visor, calculada
+    // por la propia librería (ya no forzamos el CSS del video).
+    function qrboxFunction(viewfinderWidth, viewfinderHeight) {
+      const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+      const size = Math.floor(minEdge * 0.7);
+      return { width: size, height: size };
+    }
+
     startBtn.addEventListener('click', async () => {
       startBtn.textContent = 'Abriendo cámara...';
       startError.style.display = 'none';
@@ -143,7 +138,7 @@
 
         await scanner.start(
           { facingMode: 'environment' },
-          { fps: 10, qrbox: { width: 230, height: 230 } },
+          { fps: 10, qrbox: qrboxFunction },
           onScanSuccess,
           () => {}
         );
